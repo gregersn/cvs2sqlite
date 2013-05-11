@@ -41,10 +41,7 @@ class Dataset:
 		self.fields = f
 		#print self.fields
 
-	def parseFile(self, filename, separator=';'):
-		with open(filename) as f:
-			content = f.readlines()
-
+	def parseFile(self, filename):
 		with open(filename, 'rb') as f:
 			# Sniff out the format of the csv file
 			dialect = csv.Sniffer().sniff(f.read(2048))
