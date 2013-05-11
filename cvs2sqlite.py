@@ -3,7 +3,7 @@
 
 """
 	Python script for converting a CSV to SQLite3 database.
-	
+
 	Copyright (C) 2013 Greger Stolt Nilsen
 
     This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 
 import sqlite3
 import sys, getopt
+import csv
 
 class Dataset:
 	def __init__(self):
@@ -38,69 +39,88 @@ class Dataset:
 
 	def add_fields(self, f):
 		self.fields = f
-		print self.fields
+		#print self.fields
 
 	def parseFile(self, filename, separator=';'):
 		with open(filename) as f:
 			content = f.readlines()
 
-		# Assume first line contains field names
-		fields = content[0].rstrip('\n\r').decode('utf-8').split(separator)
+		with open(filename, 'rb') as f:
+			# Sniff out the format of the csv file
+			dialect = csv.Sniffer().sniff(f.read(2048))
+			f.seek(0)
 
-		self.add_fields(fields)
+			# Read as sniffed
+			reader = csv.reader(f, dialect)
+			
+			# Assume field names in first row
+			fields = reader.next()
+			self.add_fields([f.decode('utf-8') for f in fields])
 
-		# Parse all data lines
-		for di in range(1, len(content)):
-			data = content[di].rstrip('\n\r').decode('utf-8').split(separator)
-			self.add_data(data)
+			# Add all data
+			for row in reader:
+				self.add_data([f.decode('utf-8') for f in row])
 
 	def outputDB(self, filename, tablename="dataset"):
+		# Connect to database
 		conn = sqlite3.connect(filename)
+
+		# Get database cursor
 		c = conn.cursor()
 
+		# Generate a string containing all column/field names for use in SQL
 		fieldstring = ""
 		for field in self.fields:
 			fieldstring += "%s text, " % field
-
 		fieldstring = fieldstring.rstrip(', ')
-
+	
+		# Create table from fieldstring		
 		crstring = "CREATE TABLE %s (%s)" % (tablename, fieldstring)
-
 		c.execute(crstring)
 
+		# Create INSERT string
 		insertstring = "INSERT INTO " + tablename + " VALUES (?"+(len(self.fields)-1)*",?" + ")"
-		print insertstring
+
+		# Add all data to database
 		c.executemany(insertstring, self.data)
 
 		conn.commit()
 		conn.close()
 
 def main(argv):
-	inputfile = ''
-	outputfile = ''
+	# Default values
+	inputfile = 'infile'
+	outputfile = 'outfile'
+	tablename = 'dataset'
 
+	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <table1name>'
+
+	# Parse command line options
 	try:
 		opts, args = getopt.getopt(argv, "hi:o:", ['ifile=', 'ofile='])
 	except getopt.GetoptError:
-		print 'cvs2sqlite.py -i <inputfile> -o <outputfile>'
+		print usage
 		sys.exit(2)
 
 	for opt, arg in opts:
 		if opt == '-h':
-			print 'cvs2sqlite.py -i <inputfile> -o <outputfile>'
+			print usage
 			sys.exit()
 		elif opt in ("-i", "--ifile"):
 			inputfile = arg
 		elif opt in ("-o", "--ofile"):
 			outputfile = arg
+		elif opt in ("-t", "--table"):
+			tablename = arg
 
+	
 	print "Input: ", inputfile
 	print "Output: ", outputfile
+	print "Table name: ", tablename
 	
 	ds = Dataset()
-
 	ds.parseFile(inputfile)
-	ds.outputDB(outputfile)
+	ds.outputDB(outputfile, tablename)
 
 
 if __name__ == '__main__':
