@@ -41,7 +41,7 @@ class Dataset:
 		self.fields = f
 		#print self.fields
 
-	def parseFile(self, filename):
+	def parseFile(self, filename, header=True):
 		with open(filename, 'rb') as f:
 			# Sniff out the format of the csv file
 			dialect = csv.Sniffer().sniff(f.read(2048))
@@ -50,12 +50,15 @@ class Dataset:
 			# Read as sniffed
 			reader = csv.reader(f, dialect)
 			
-			# Assume field names in first row
-			fields = reader.next()
-			self.add_fields([f.decode('utf-8') for f in fields])
+			if header is True:
+				# Assume field names in first row
+				fields = reader.next()
+				self.add_fields([f.decode('utf-8') for f in fields])
 
 			# Add all data
 			for row in reader:
+				if header is False:
+					self.add_fields([('Field_%s' % str(i+1)).decode('utf-8') for i in range(len(row))])
 				self.add_data([f.decode('utf-8') for f in row])
 
 	def outputDB(self, filename, tablename="dataset"):
@@ -89,19 +92,20 @@ def main(argv):
 	inputfile = 'infile'
 	outputfile = 'outfile'
 	tablename = 'dataset'
+	header = True
 
-	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <table1name>'
+	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <tablename> --noheader'
 
 	# Parse command line options
 	try:
-		opts, args = getopt.getopt(argv, "hi:o:", ['ifile=', 'ofile='])
+		opts, args = getopt.getopt(argv, "hi:o:t:", ['ifile=', 'ofile=', 'noheader', 'table='])
 	except getopt.GetoptError:
 		print usage
 		sys.exit(2)
 
 	for opt, arg in opts:
 		if opt == '-h':
-			print usage
+			print "Help; ", usage
 			sys.exit()
 		elif opt in ("-i", "--ifile"):
 			inputfile = arg
@@ -109,6 +113,10 @@ def main(argv):
 			outputfile = arg
 		elif opt in ("-t", "--table"):
 			tablename = arg
+		elif opt in ("-n", "--noheader"):
+			header = False
+		else:
+			print opt
 
 	
 	print "Input: ", inputfile
@@ -116,7 +124,7 @@ def main(argv):
 	print "Table name: ", tablename
 	
 	ds = Dataset()
-	ds.parseFile(inputfile)
+	ds.parseFile(inputfile, header)
 	ds.outputDB(outputfile, tablename)
 
 
