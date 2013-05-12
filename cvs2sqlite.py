@@ -28,6 +28,13 @@ class Dataset:
 	def __init__(self):
 		self.fields = []
 		self.data = []
+		self.tables = {}
+
+	def add_table(self, table, fields, data):
+		_table['fields'] = fields
+		_table['data'] = data
+
+		self.tables[table] = _table
 
 	def add_data(self, d):
 		""" Add a tuple of data """
@@ -61,8 +68,42 @@ class Dataset:
 					self.add_fields([('Field_%s' % str(i+1)).decode('utf-8') for i in range(len(row))])
 				self.add_data([f.decode('utf-8') for f in row])
 
-	def outputDB(self, filename, tablename="dataset"):
+	def normalize(self, threshold=5):
+		""" Try to split out fields which have few distinct values into their own tables """
+		fields = {}
+		for f in self.fields:
+			fields[f] = {}
+		print fields
+		for data in self.data:
+			for c in range(len(data)):
+				if data[c] not in fields[self.fields[c]]:
+					fields[self.fields[c]][data[c]] = 1	
+				else:
+					fields[self.fields[c]][data[c]] += 1	
+				
+
+		# Loop through fields
+		for f in fields:
+			# In case there are less unique values than threshold
+			if 1 < len(fields[f]) <= threshold:
+				# Process field
+				print "Processing field: %s, %d" % (f, len(fields[f]))
+				table_name = 't_'+f
+				table_fields = (f,)
+				table_values = []
+				for k,v in fields[f].iteritems():
+					table_values.append([k,])
+
+				self.tables[table_name] = (table_name, table_fields, table_values,)
+
+		#print self.tables
+
+	def createTable(self, filename, tablename, fields, data):
 		# Connect to database
+
+		#print tablename
+		#print fields
+		#print data
 		conn = sqlite3.connect(filename)
 
 		# Get database cursor
@@ -70,22 +111,34 @@ class Dataset:
 
 		# Generate a string containing all column/field names for use in SQL
 		fieldstring = ""
-		for field in self.fields:
+		for field in fields:
 			fieldstring += "%s text, " % field
 		fieldstring = fieldstring.rstrip(', ')
 	
 		# Create table from fieldstring		
 		crstring = "CREATE TABLE %s (%s)" % (tablename, fieldstring)
+		#print crstring
 		c.execute(crstring)
 
 		# Create INSERT string
-		insertstring = "INSERT INTO " + tablename + " VALUES (?"+(len(self.fields)-1)*",?" + ")"
-
+		insertstring = "INSERT INTO " + tablename + " VALUES (?"+(len(fields)-1)*",?" + ")"
+		#print insertstring
 		# Add all data to database
-		c.executemany(insertstring, self.data)
+		c.executemany(insertstring, data)
 
 		conn.commit()
 		conn.close()
+
+	def outputDB(self, filename, tablename="dataset"):
+		if len(self.tables) > 0:
+			print "Multiple tables: "
+			for table in self.tables:
+				_tablename = self.tables[table][0]
+				_fields = self.tables[table][1]
+				_data = self.tables[table][2]
+				self.createTable(filename, _tablename, _fields, _data)
+
+		self.createTable(filename, tablename, self.fields, self.data)
 
 def main(argv):
 	# Default values
@@ -93,12 +146,13 @@ def main(argv):
 	outputfile = 'outfile'
 	tablename = 'dataset'
 	header = True
+	normalize = False
 
 	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <tablename> --noheader'
 
 	# Parse command line options
 	try:
-		opts, args = getopt.getopt(argv, "hi:o:t:", ['ifile=', 'ofile=', 'noheader', 'table='])
+		opts, args = getopt.getopt(argv, "hi:o:t:", ['ifile=', 'ofile=', 'noheader', 'table=', 'normalize'])
 	except getopt.GetoptError:
 		print usage
 		sys.exit(2)
@@ -115,6 +169,8 @@ def main(argv):
 			tablename = arg
 		elif opt in ("-n", "--noheader"):
 			header = False
+		elif opt in ("--normalize"):
+			normalize = True
 		else:
 			print opt
 
@@ -125,6 +181,8 @@ def main(argv):
 	
 	ds = Dataset()
 	ds.parseFile(inputfile, header)
+	if normalize is True:
+		ds.normalize()
 	ds.outputDB(outputfile, tablename)
 
 
