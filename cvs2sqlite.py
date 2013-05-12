@@ -40,6 +40,7 @@ class Dataset:
 		""" Add a tuple of data """
 		if len(d) != len(self.fields):
 			print "Wrong number of data elements"
+			print d
 			return
 
 		self.data.append(d)
@@ -48,10 +49,10 @@ class Dataset:
 		self.fields = f
 		#print self.fields
 
-	def parseFile(self, filename, header=True):
+	def parseFile(self, filename, header=True, sniff=2048):
 		with open(filename, 'rb') as f:
 			# Sniff out the format of the csv file
-			dialect = csv.Sniffer().sniff(f.read(2048))
+			dialect = csv.Sniffer().sniff(f.read(sniff))
 			f.seek(0)
 
 			# Read as sniffed
@@ -147,12 +148,13 @@ def main(argv):
 	tablename = 'dataset'
 	header = True
 	normalize = False
+	sniff = 2048
 
-	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <tablename> --noheader'
-
+	usage = 'cvs2sqlite.py -i <inputfile> -o <outputfile> -t <tablename> --noheader -s <snifflength>'
+	
 	# Parse command line options
 	try:
-		opts, args = getopt.getopt(argv, "hi:o:t:", ['ifile=', 'ofile=', 'noheader', 'table=', 'normalize'])
+		opts, args = getopt.getopt(argv, "hi:o:t:s:", ['ifile=', 'ofile=', 'noheader', 'table=', 'normalize', 'sniff='])
 	except getopt.GetoptError:
 		print usage
 		sys.exit(2)
@@ -171,6 +173,8 @@ def main(argv):
 			header = False
 		elif opt in ("--normalize"):
 			normalize = True
+		elif opt in ("-s", "--sniff"):
+			sniff = opt
 		else:
 			print opt
 
@@ -180,7 +184,7 @@ def main(argv):
 	print "Table name: ", tablename
 	
 	ds = Dataset()
-	ds.parseFile(inputfile, header)
+	ds.parseFile(inputfile, header, sniff=sniff)
 	if normalize is True:
 		ds.normalize()
 	ds.outputDB(outputfile, tablename)
