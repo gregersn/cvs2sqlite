@@ -24,6 +24,20 @@ import sqlite3
 import sys, getopt
 import csv
 
+def is_int(i):
+	try:
+		v = int(i)
+		return True
+	except ValueError:
+		return False
+
+def is_float(f):
+	try:
+		v = float(f)
+		return True
+	except ValueError:
+		return False
+
 class Dataset:
 	def __init__(self):
 		self.fields = []
